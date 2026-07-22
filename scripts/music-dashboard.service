@@ -1,0 +1,21 @@
+[Unit]
+Description=music-stack control panel
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=ubuntu
+Group=ubuntu
+ExecStart=/usr/bin/python3 /home/ubuntu/music-stack/scripts/dashboard.py
+Restart=always
+RestartSec=5
+
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/home/ubuntu/music-stack
+PrivateTmp=true
+NoNewPrivileges=false
+
+[Install]
+WantedBy=multi-user.target

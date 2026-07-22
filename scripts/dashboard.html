@@ -1,0 +1,1175 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>music-stack</title>
+<style>
+  /* Navidrome's own palette, taken from its bundle. Default 'Dark' theme:
+     primary #90caf9 on a Material dark surface (#303030 bg, #424242 paper).
+     'Light' theme accent is #2196f3. No gradient, no glow. */
+  :root {
+    --bg: #303030; --panel: #424242; --panel2: #4d4d4d; --line: rgba(255,255,255,.12);
+    --text: #f2f2f2; --dim: rgba(255,255,255,.6);
+    --accent: #90caf9; --on-accent: rgba(0,0,0,.87);
+    --ok: #66bb6a; --warn: #ffa726; --bad: #f44336;
+    --shadow: 0 1px 3px rgba(0,0,0,.5), 0 8px 24px rgba(0,0,0,.34);
+    --mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+  }
+  @media (prefers-color-scheme: light) {
+    :root {
+      --bg: #fafafa; --panel: #fff; --panel2: #f0f0f0; --line: rgba(0,0,0,.12);
+      --text: #212121; --dim: rgba(0,0,0,.6);
+      --accent: #2196f3; --on-accent: #ffffff;
+      --ok: #43a047; --warn: #fb8c00; --bad: #e53935;
+      --shadow: 0 1px 2px rgba(0,0,0,.06), 0 8px 24px rgba(0,0,0,.08);
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font: 15px/1.5 system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+  }
+  header {
+    display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
+    padding: 14px 22px; border-bottom: 1px solid var(--line);
+    position: sticky; top: 0; z-index: 10; background: var(--bg);
+  }
+  header .brand {
+    width: 34px; height: 34px; border-radius: 9px; color: var(--accent);
+    background: color-mix(in srgb, var(--accent) 16%, transparent);
+    display: inline-flex; align-items: center; justify-content: center;
+    transition: background .15s ease;
+  }
+  header .brand:hover { background: color-mix(in srgb, var(--accent) 26%, transparent); }
+  .topnav { display: flex; gap: 16px; align-items: center; }
+  .topnav a {
+    color: var(--dim); font-family: var(--mono); font-size: 11.5px;
+    text-transform: uppercase; letter-spacing: 1px;
+    padding-bottom: 2px; border-bottom: 1.5px solid transparent;
+  }
+  .topnav a:hover { color: var(--text); border-bottom-color: var(--accent); text-decoration: none; }
+  main { max-width: 1100px; margin: 0 auto; padding: 22px; display: grid; gap: 22px; }
+  /* Operational panels sit two-up on desktop, paired by relation, and the
+     rows don't stretch to match each other's height. One column on mobile. */
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 22px; align-items: start; }
+  @media (max-width: 760px) { .grid2 { grid-template-columns: 1fr; } }
+  .panel {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+    overflow: hidden; box-shadow: var(--shadow), inset 0 1px 0 rgba(255,255,255,.05);
+    animation: rise .42s cubic-bezier(.2,.7,.3,1) both;
+  }
+  /* A short cascade as the page settles -- orientation, not decoration. */
+  main > .panel:nth-child(1) { animation-delay: .02s; }
+  main > .panel:nth-child(2) { animation-delay: .06s; }
+  .grid2 .panel:nth-child(1) { animation-delay: .10s; }
+  .grid2 .panel:nth-child(2) { animation-delay: .13s; }
+  .grid2 .panel:nth-child(3) { animation-delay: .16s; }
+  .grid2 .panel:nth-child(4) { animation-delay: .19s; }
+  @keyframes rise { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+  @keyframes fadein { from { opacity: 0; } to { opacity: 1; } }
+  @keyframes pop { from { opacity: 0; transform: translateY(8px) scale(.98); } to { opacity: 1; transform: none; } }
+  .phead {
+    display: flex; align-items: center; gap: 10px;
+    padding: 11px 18px 11px 15px; border-bottom: 1px solid var(--line);
+  }
+  .phead::before {
+    content: ''; width: 3px; height: 13px; border-radius: 2px;
+    background: var(--accent); flex: none;
+  }
+  .phead h2 {
+    margin: 0; font-family: var(--mono); font-size: 12px; text-transform: uppercase;
+    letter-spacing: 1.3px; color: var(--text); font-weight: 600;
+  }
+  .info {
+    margin-left: auto; width: 24px; height: 24px; padding: 0; border-radius: 50%;
+    display: inline-flex; align-items: center; justify-content: center;
+    font-size: 13px; line-height: 1; color: var(--dim);
+  }
+  .info[aria-expanded="true"] { border-color: var(--accent); color: var(--accent); }
+  .help {
+    padding: 14px 18px; border-bottom: 1px solid var(--line);
+    background: var(--panel2); color: var(--dim); font-size: 13.5px; line-height: 1.6;
+  }
+  .help[hidden] { display: none; }
+  .help:not([hidden]) { animation: fadein .2s ease; }
+  .help b { color: var(--text); font-weight: 600; }
+  .help code {
+    font-family: var(--mono); font-size: 12.5px; background: var(--bg);
+    padding: 1px 5px; border-radius: 4px;
+  }
+  .help .legend { display: flex; flex-wrap: wrap; gap: 8px 16px; margin-top: 10px; }
+  .help .legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .help ul { margin: 8px 0 0; padding-left: 18px; }
+  .help li { margin: 3px 0; }
+  .panel .body { padding: 16px 18px; }
+  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(96px, 1fr)); gap: 10px; }
+  .stat {
+    background: var(--panel2); border-radius: 10px; padding: 11px 14px;
+    transition: transform .15s ease, background .15s ease;
+  }
+  .stat:hover { transform: translateY(-2px); background: color-mix(in srgb, var(--accent) 9%, var(--panel2)); }
+  .stat .n {
+    font-family: var(--mono); font-variant-numeric: tabular-nums;
+    font-size: 23px; font-weight: 600; letter-spacing: -.5px;
+  }
+  .stat .l {
+    font-family: var(--mono); text-transform: uppercase; letter-spacing: .6px;
+    color: var(--dim); font-size: 10.5px; margin-top: 4px;
+  }
+  table { width: 100%; border-collapse: collapse; }
+  th, td { text-align: left; padding: 9px 18px; border-bottom: 1px solid var(--line); }
+  td { transition: background .12s ease; }
+  th { color: var(--dim); font-family: var(--mono); font-weight: 500; font-size: 11px; text-transform: uppercase; letter-spacing: 1px; }
+  tr:last-child td { border-bottom: 0; }
+  /* Row highlight only over data rows -- the header uses th, not td. */
+  tbody tr:hover td { background: color-mix(in srgb, var(--accent) 7%, transparent); }
+  td.num { font-family: var(--mono); font-variant-numeric: tabular-nums; color: var(--dim); }
+  .tag {
+    font-family: var(--mono); font-size: 10.5px; text-transform: uppercase;
+    letter-spacing: .5px; padding: 3px 8px; border-radius: 5px; font-weight: 600;
+  }
+  .tag.sync { background: color-mix(in srgb, var(--warn) 22%, transparent); color: var(--warn); }
+  .tag.own { background: color-mix(in srgb, var(--ok) 22%, transparent); color: var(--ok); }
+  button {
+    font: inherit; font-size: 13px; cursor: pointer; border: 1px solid var(--line);
+    background: var(--panel2); color: var(--text); padding: 6px 13px; border-radius: 8px;
+    transition: border-color .15s ease, transform .1s ease, background .15s ease;
+  }
+  button:hover { border-color: var(--accent); transform: translateY(-1px); }
+  button:active { transform: translateY(0); }
+  button.primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+  button.primary:hover { background: color-mix(in srgb, var(--accent) 85%, #000); }
+  button.danger:hover { border-color: var(--bad); color: var(--bad); }
+  button:disabled { opacity: .45; cursor: default; }
+  .actions { display: flex; flex-wrap: wrap; gap: 9px; }
+  .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 7px; vertical-align: middle; }
+  .dot.running { background: var(--accent); animation: pulse 1s infinite; }
+  .dot.done { background: var(--ok); } .dot.failed { background: var(--bad); }
+  @keyframes pulse { 50% { opacity: .3; } }
+  .spin {
+    display: inline-block; width: 12px; height: 12px; vertical-align: -1px;
+    border: 2px solid currentColor; border-top-color: transparent;
+    border-radius: 50%; animation: rot .6s linear infinite;
+  }
+  @keyframes rot { to { transform: rotate(360deg); } }
+  pre {
+    margin: 0; padding: 14px 16px; background: #0b0d11; color: #cdd3de;
+    font-family: var(--mono); font-size: 12.5px; line-height: 1.55;
+    max-height: 340px; overflow: auto; border-radius: 8px; white-space: pre-wrap;
+  }
+  .muted { color: var(--dim); }
+  .empty { color: var(--dim); padding: 6px 0; }
+  .scroll { overflow-x: auto; }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  #detail {
+    position: fixed; inset: 0; background: var(--bg); z-index: 20;
+    overflow-y: auto; padding: 22px;
+  }
+  #detail[hidden] { display: none; }
+  #detail:not([hidden]) { animation: fadein .18s ease both; }
+  .dpanel { max-width: 1000px; margin: 0 auto; animation: rise .3s cubic-bezier(.2,.7,.3,1) both; }
+  .dhead { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin-bottom: 18px; }
+  .dhead h2 { margin: 0; font-size: 20px; }
+  .st {
+    font-family: var(--mono); font-size: 10.5px; text-transform: uppercase;
+    letter-spacing: .5px; padding: 3px 9px; border-radius: 5px; font-weight: 600; white-space: nowrap;
+  }
+  .st.present { background: color-mix(in srgb, var(--ok) 20%, transparent); color: var(--ok); }
+  .st.missing { background: color-mix(in srgb, var(--bad) 20%, transparent); color: var(--bad); }
+  .st.excluded { background: var(--panel2); color: var(--dim); }
+  tr.is-excluded td:not(:last-child) { opacity: .5; }
+  .drop {
+    border: 2px dashed var(--line); border-radius: 10px; padding: 30px 18px;
+    text-align: center; color: var(--dim); transition: border-color .15s, background .15s;
+  }
+  .drop.over { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 10%, transparent); }
+  .link { color: var(--accent); cursor: pointer; text-decoration: underline; }
+  dialog {
+    border: 1px solid var(--line); background: var(--panel); color: var(--text);
+    border-radius: 12px; padding: 0; max-width: 440px; width: 92%;
+  }
+  dialog[open] { animation: pop .2s cubic-bezier(.2,.7,.3,1); }
+  dialog::backdrop { background: rgba(0,0,0,.55); }
+  dialog[open]::backdrop { animation: fadein .2s ease; }
+  dialog .body { padding: 20px; }
+  dialog h3 { margin: 0 0 10px; }
+  dialog .row { display: flex; gap: 9px; justify-content: flex-end; margin-top: 18px; }
+  /* Let the artist dropdown spill past the dialog edge instead of being
+     clipped (and scrolling the whole modal). The long inner lists -- file rows,
+     folder list -- keep their own scroll, so the dialog itself never needs one. */
+  #browser, #import { max-width: 560px; overflow: visible; }
+  .ifields { display: grid; gap: 9px; }
+  .ifields input, .irow input {
+    font: inherit; font-size: 13.5px; padding: 7px 10px; color: var(--text);
+    background: var(--panel2); border: 1px solid var(--line); border-radius: 8px;
+  }
+  .irow {
+    display: flex; align-items: center; gap: 8px; padding: 6px 0;
+    border-bottom: 1px solid var(--line);
+  }
+  .irow:last-child { border-bottom: 0; }
+  .irow .num { width: 52px; text-align: center; }
+  .irow .ti { flex: 1; }
+  .irow .rm { color: var(--dim); cursor: pointer; padding: 4px 8px; }
+  .irow .rm:hover { color: var(--bad); }
+  .combo { position: relative; }
+  .combo input { width: 100%; }
+  .combo-menu {
+    position: absolute; left: 0; right: 0; top: calc(100% + 4px); z-index: 50;
+    background: var(--panel); border: 1px solid var(--line); border-radius: 8px;
+    box-shadow: var(--shadow); max-height: 220px; overflow-y: auto; padding: 4px;
+    overscroll-behavior: contain; animation: fadein .12s ease;
+  }
+  .combo-menu[hidden] { display: none; }
+  .combo-opt {
+    padding: 7px 10px; border-radius: 6px; cursor: pointer; font-size: 13.5px;
+  }
+  .combo-opt:hover, .combo-opt.active {
+    background: color-mix(in srgb, var(--accent) 15%, transparent);
+  }
+  .combo-opt b { color: var(--accent); font-weight: 600; }
+  /* Uploads tray: background transfers stay visible here while you work. */
+  #uploads {
+    position: fixed; right: 18px; bottom: 18px; width: 320px; max-width: calc(100vw - 36px);
+    z-index: 60; background: var(--panel); border: 1px solid var(--line);
+    border-radius: 12px; box-shadow: var(--shadow); overflow: hidden; animation: rise .2s ease;
+  }
+  #uploads[hidden] { display: none; }
+  .uphead {
+    display: flex; align-items: center; gap: 8px; padding: 10px 14px;
+    border-bottom: 1px solid var(--line); font-size: 13px; font-weight: 600;
+  }
+  .uphead .uplink {
+    margin-left: auto; background: none; border: 0; color: var(--dim);
+    font-size: 12px; cursor: pointer; padding: 2px 4px;
+  }
+  .uphead .uplink:hover { color: var(--accent); }
+  #upList { max-height: 240px; overflow: auto; padding: 4px 0; }
+  .upitem { padding: 7px 14px; }
+  .upname { font-size: 12.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .upbar { height: 5px; background: var(--panel2); border-radius: 3px; margin: 5px 0 2px; overflow: hidden; }
+  .upbar > div { height: 100%; background: var(--accent); width: 0; transition: width .15s ease; }
+  .upstat { color: var(--dim); font-size: 11.5px; }
+  .fsrow {
+    display: flex; align-items: center; gap: 10px; padding: 8px 12px;
+    border-bottom: 1px solid var(--line); font-size: 13.5px;
+  }
+  .fsrow:last-child { border-bottom: 0; }
+  .fsrow.dir { cursor: pointer; }
+  .fsrow.dir:hover { background: color-mix(in srgb, var(--accent) 8%, transparent); }
+  .fsrow .ic { width: 16px; text-align: center; color: var(--dim); }
+  .fsrow .sz { margin-left: auto; color: var(--dim); font-family: var(--mono); font-size: 12px; }
+  .fsrow.up { color: var(--dim); }
+
+  /* Keyboard: a clear focus ring on every interactive element. Mouse users
+     never see it (:focus-visible), so it costs the visual design nothing. */
+  button:focus-visible, a:focus-visible, .link:focus-visible,
+  input:focus-visible, [tabindex]:focus-visible {
+    outline: 2px solid var(--accent); outline-offset: 2px;
+  }
+  /* Touch: bump every tap target to the 44px minimum on coarse pointers,
+     while keeping the compact spacing on a desktop mouse. */
+  @media (pointer: coarse) {
+    button { min-height: 44px; padding: 10px 16px; }
+    .info { width: 44px; height: 44px; }
+  }
+  /* Motion: drop the decorative pulse and shorten transitions for users who
+     ask for less motion. The loading spinner stays -- it is feedback, not
+     decoration -- but slows so it is calmer. */
+  @media (prefers-reduced-motion: reduce) {
+    * { transition-duration: .01ms !important; }
+    .panel, .dpanel, #detail, dialog[open], dialog[open]::backdrop,
+    .help:not([hidden]) { animation: none !important; }
+    .dot.running { animation: none; }
+    .spin { animation-duration: 1.4s; }
+    button:hover, .stat:hover { transform: none; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <a class="brand" href="/" title="music-stack" aria-label="music-stack">
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 3v10.55A4 4 0 1 0 14 17V7h4V3z"/></svg>
+  </a>
+  <nav class="topnav">
+    <a id="lnkNavidrome" href="#" target="_blank" rel="noopener" hidden>Navidrome</a>
+    <a id="lnkDeemix" href="#" target="_blank" rel="noopener" hidden>deemix</a>
+  </nav>
+  <button style="margin-left:auto" onclick="openBrowser()" title="Sfoglia le cartelle, creane di nuove, carica file">Cartelle</button>
+  <button onclick="openImport()" title="Carica un album intero, i tag li mette il server">Importa album</button>
+  <button class="primary" onclick="openUpload(null)">+ Aggiungi file</button>
+</header>
+
+<main>
+  <section class="panel" data-help="lib">
+    <div class="phead"><h2>Libreria</h2><button class="info" title="Cos'è">ⓘ</button></div>
+    <div class="help" hidden>
+      Conteggi presi dal database di Navidrome e dai file su disco. Navidrome
+      raggruppa i brani per <b>tag</b>, non per cartelle: la struttura
+      <code>Artista/Album/</code> serve solo a te.
+      <ul>
+        <li><b>Album veri</b>: con più di una traccia.</li>
+        <li><b>Singoli</b>: album da una traccia sola. Su Deezer è spesso normale —
+          molti artisti pubblicano ogni brano come singolo.</li>
+      </ul>
+    </div>
+    <div class="body"><div class="stats" id="stats"><span class="empty">…</span></div></div>
+  </section>
+
+  <section class="panel" data-help="pl">
+    <div class="phead"><h2>Playlist</h2><button class="info" title="Cos'è">ⓘ</button></div>
+    <div class="help" hidden>
+      Ogni playlist è in uno di due stati.
+      <div class="legend">
+        <span><span class="tag sync">sincronizzata</span> allineata alla tua
+          playlist su Deezer.</span>
+        <span><span class="tag own">tua</span> staccata: la modifichi da Symfonium
+          e nessuno la sovrascrive.</span>
+      </div>
+      <ul>
+        <li><b>Aggiungi un brano su Deezer</b>: compare come mancante. Lo scarichi
+          e viene aggiunto alla playlist da solo.</li>
+        <li><b>Togli un brano su Deezer</b>: esce dalla playlist da solo (il file
+          resta in libreria).</li>
+        <li><b>Detach</b> trasforma una sincronizzata in tua. Operazione a senso
+          unico: dopo, niente la aggiorna più da Deezer. Reversibile a mano —
+          l'm3u8 viene archiviato, non cancellato.</li>
+        <li>Finché è sincronizzata, <b>non</b> aggiungere brani da Symfonium: la
+          modifica sparisce alla prossima scansione. Fai le modifiche su Deezer.</li>
+        <li>Tocca il <b>nome</b> di una playlist per vederne tutti i brani —
+          presenti, mancanti, esclusi. Un brano mancante che non troverai mai
+          (non disponibile) puoi <b>escluderlo</b>: repair smette di darlo per
+          mancante e, se era l'ultimo, la playlist risulta completa.</li>
+      </ul>
+    </div>
+    <div class="scroll"><table id="playlists"><tbody><tr><td class="empty">…</td></tr></tbody></table></div>
+  </section>
+
+  <div class="grid2">
+  <section class="panel" data-help="maint">
+    <div class="phead"><h2>Manutenzione</h2><button class="info" title="Cos'è">ⓘ</button></div>
+    <div class="help" hidden>
+      Due script, lanciati come job in background — l'output compare qui sotto in
+      <b>Job</b>. Girano anche da soli ogni 15 minuti; questi pulsanti li forzano
+      subito.
+      <ul>
+        <li><b>Album remap</b>: un brano scaricato da una playlist può arrivare
+          taggato come album a sé (deemix segue la release che la playlist indica).
+          Lo script chiede a Deezer a quale album/EP appartiene davvero e sistema
+          tag e cartella.</li>
+        <li><b>Playlist repair</b>: ricostruisce gli m3u8 dalla playlist Deezer
+          usando i file presenti in libreria — recupera i brani arrivati tardi e
+          segnala quelli davvero mancanti.</li>
+      </ul>
+      <b>Anteprima</b> mostra solo cosa cambierebbe; <b>applica</b> scrive.
+    </div>
+    <div class="body"><div class="actions" id="actions"></div></div>
+  </section>
+
+  <section class="panel" data-help="queue">
+    <div class="phead"><h2>Coda deemix</h2><button class="info" title="Cos'è">ⓘ</button></div>
+    <div class="help" hidden>
+      I job che deemix tiene su disco. Ognuno mostra il progresso e le eventuali
+      tracce fallite con il motivo.
+      <div class="legend">
+        <span><span class="tag own">completato</span> ha finito, è solo residuo.</span>
+        <span><span class="tag sync">orfano</span> non finito e fuori dalla coda
+          attiva: può essere bloccato.</span>
+      </div>
+      <ul>
+        <li><b>Pulisci</b> rimuove il job: ferma deemix un istante, cancella il
+          file di coda e riavvia. I brani già scaricati restano.</li>
+        <li>Un job orfano bloccato in loop su una traccia non disponibile può
+          occupare la coda per giorni — il pannello <b>Errori</b> lo segnala.</li>
+      </ul>
+    </div>
+    <div class="scroll"><table id="queue"><tbody></tbody></table></div>
+  </section>
+
+  <section class="panel" data-help="jobs">
+    <div class="phead"><h2>Job</h2><button class="info" title="Cos'è">ⓘ</button></div>
+    <div class="help" hidden>
+      Le esecuzioni lanciate da questa pagina (manutenzione, detach, pulizia coda).
+      Girano in background; <b>output</b> mostra il log in tempo reale mentre un
+      job è in corso. La lista si azzera al riavvio del servizio.
+    </div>
+    <div class="body" id="jobs"><span class="empty">nessun job in questa sessione</span></div>
+  </section>
+
+  <section class="panel" data-help="err">
+    <div class="phead"><h2>Errori</h2><button class="info" title="Cos'è">ⓘ</button></div>
+    <div class="help" hidden>
+      L'ultimo report di deemix (<code>errors.txt</code>, sovrascritto a ogni
+      download) e un controllo sui log recenti. Molti <code>Track not available</code>
+      di fila significano che deemix è <b>bloccato in loop</b> su un brano
+      irrecuperabile: pulisci il job orfano corrispondente nella coda.
+    </div>
+    <div class="body" id="errors"><span class="empty">…</span></div>
+  </section>
+  </div>
+</main>
+
+<div id="detail" hidden>
+  <div class="dpanel">
+    <div class="dhead">
+      <button onclick="closePlaylist()">← indietro</button>
+      <h2 id="dTitle"></h2>
+      <span id="dSummary" class="muted"></span>
+      <button class="primary" style="margin-left:auto" onclick="openUpload(detailName)">+ Aggiungi file</button>
+    </div>
+    <div class="scroll"><table id="dTracks"><tbody></tbody></table></div>
+  </div>
+</div>
+
+<dialog id="upload">
+  <div class="body">
+    <h3>Aggiungi un file</h3>
+    <div class="muted" style="margin-bottom:14px; font-size:13.5px">
+      <span id="uploadScope"></span> Se corrisponde a un brano <b>mancante</b>
+      viene aggiunto alla playlist; altrimenti finisce solo in libreria.
+    </div>
+    <div id="drop" class="drop">
+      Trascina qui l'mp3, oppure
+      <label class="link">scegli un file<input type="file" accept=".mp3,audio/mpeg" hidden id="file"></label>
+    </div>
+    <div id="uploadMsg" class="muted" style="margin-top:14px" aria-live="polite"></div>
+    <div class="row"><button onclick="document.getElementById('upload').close()">Chiudi</button></div>
+  </div>
+</dialog>
+
+<dialog id="import">
+  <div class="body">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
+      <h3 style="margin:0">Importa album</h3>
+      <button style="margin-left:auto" onclick="document.getElementById('import').close()">Chiudi</button>
+    </div>
+    <div class="muted" style="font-size:13.5px;margin-bottom:12px">
+      Metti artista e titolo dell'album, trascina le tracce: il server le tagga
+      e le archivia in <code>Artista/Album/</code>. Titolo e numero traccia sono
+      indovinati dal nome file — correggili se serve.
+      <div style="margin-top:8px">
+        <span style="color:var(--ok)">✓</span> L'album viene <b>protetto</b>:
+        nessuno script lo tocca più (album-remap lo salta, e non è una playlist
+        Deezer, quindi playlist-repair lo ignora). Resta come lo carichi.
+      </div>
+    </div>
+    <div class="ifields">
+      <div class="combo">
+        <input id="impAA" placeholder="Artista dell'album *" autocomplete="off"
+          role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="impAAmenu">
+        <div id="impAAmenu" class="combo-menu" role="listbox" hidden></div>
+      </div>
+      <input id="impAL" placeholder="Titolo album * (es. Concerto X (Live))">
+    </div>
+    <div id="impDrop" class="drop" style="margin-top:12px;padding:20px">
+      Trascina qui le tracce, oppure
+      <label class="link">scegli<input type="file" accept="audio/*,.mp3,.m4a,.flac,.ogg,.opus,.wav,.aac,.aiff" multiple hidden id="impFile"></label>
+    </div>
+    <div id="impRows" class="scroll" style="max-height:260px;overflow:auto;margin-top:12px"></div>
+    <div id="impMsg" class="muted" style="margin-top:10px" aria-live="polite"></div>
+    <div class="row"><button class="primary" id="impGo" onclick="doImport()" disabled>Importa</button></div>
+  </div>
+</dialog>
+
+<dialog id="browser">
+  <div class="body">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px">
+      <h3 style="margin:0">Cartelle</h3>
+      <button style="margin-left:auto" onclick="document.getElementById('browser').close()">Chiudi</button>
+    </div>
+    <div id="fsCrumb" class="muted" style="font-family:var(--mono);font-size:12.5px;margin-bottom:10px">music/</div>
+    <div style="display:flex;gap:8px;margin-bottom:12px">
+      <input id="fsNew" placeholder="nuova cartella…"
+        style="flex:1;font:inherit;font-size:13px;padding:6px 10px;border:1px solid var(--line);border-radius:8px;background:var(--panel2);color:var(--text)">
+      <button onclick="fsMkdir()">＋ Crea</button>
+    </div>
+    <div id="fsList" class="scroll" style="max-height:300px;overflow:auto;border:1px solid var(--line);border-radius:8px"></div>
+    <div id="fsDrop" class="drop" style="margin-top:12px;padding:20px">
+      Trascina qui i file audio per caricarli in <b>questa</b> cartella, oppure
+      <label class="link">scegli<input type="file" accept="audio/*,.mp3,.m4a,.flac,.ogg,.opus,.wav,.aac,.aiff" multiple hidden id="fsFile"></label>
+    </div>
+    <div id="fsMsg" class="muted" style="margin-top:10px" aria-live="polite"></div>
+  </div>
+</dialog>
+
+<div id="uploads" hidden>
+  <div class="uphead"><span id="upTitle">Caricamenti</span>
+    <button class="uplink" onclick="clearDoneUploads()">pulisci</button></div>
+  <div id="upList"></div>
+</div>
+
+<dialog id="confirm">
+  <div class="body">
+    <h3 id="cTitle"></h3>
+    <div id="cText" class="muted"></div>
+    <div class="row">
+      <button onclick="document.getElementById('confirm').close()">Annulla</button>
+      <button class="primary" id="cOk">Conferma</button>
+    </div>
+  </div>
+</dialog>
+
+<script>
+const $ = s => document.querySelector(s);
+const api = (p, opt) => fetch(p, opt).then(r => r.json());
+const esc = s => (s ?? "").toString().replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+let watching = new Set();
+
+// Per-panel help, collapsed by default, choice remembered across visits.
+function setupHelp() {
+  let open;
+  try { open = JSON.parse(localStorage.helpOpen || '{}'); } catch { open = {}; }
+  document.querySelectorAll('.panel[data-help]').forEach(panel => {
+    const key = panel.dataset.help;
+    const btn = panel.querySelector('.info');
+    const help = panel.querySelector('.help');
+    btn.setAttribute('aria-label', 'Informazioni su ' + (panel.querySelector('h2')?.textContent || 'questa sezione'));
+    const apply = on => {
+      help.hidden = !on;
+      btn.setAttribute('aria-expanded', on ? 'true' : 'false');
+    };
+    apply(!!open[key]);
+    btn.onclick = () => {
+      const on = help.hidden;
+      apply(on);
+      open[key] = on;
+      localStorage.helpOpen = JSON.stringify(open);
+    };
+  });
+}
+
+async function loadStats() {
+  const s = await api('/api/stats');
+  const cells = [
+    [s.tracks, 'tracce'], [s.albums, 'album'],
+    [s.albums_multi, 'album veri'], [s.albums_single, 'singoli'],
+    [s.artists, 'artisti'], [s.size_gb + ' GB', 'su disco'],
+  ];
+  $('#stats').innerHTML = cells.map(([n, l]) =>
+    `<div class="stat"><div class="n">${esc(n)}</div><div class="l">${l}</div></div>`).join('');
+}
+
+async function loadPlaylists() {
+  const rows = await api('/api/playlists');
+  const head = `<tr><th>Nome</th><th>Scaricati</th><th>Stato</th><th></th></tr>`;
+  const body = rows.map(p => {
+    const tag = p.synced
+      ? `<span class="tag sync">sincronizzata</span>`
+      : `<span class="tag own">tua</span>`;
+    const warn = p.synced && !p.file_present
+      ? ` <span class="muted">(file assente)</span>` : '';
+    const btn = p.synced
+      ? `<button class="danger" title="Rendila tua e modificabile da Symfonium (a senso unico)" data-act="detach" data-name="${esc(p.name)}">Detach</button>`
+      : `<span class="muted">modificabile</span>`;
+    const link = `<a href="#" data-act="show" data-name="${esc(p.name)}">${esc(p.name)}</a>`;
+    // Synced: 'scaricati / tutti' vs the Deezer playlist -- filled in by
+    // loadCounts once the (slower) Deezer pass returns. Detached: just its own
+    // count, nothing on Deezer to compare against.
+    const count = p.synced
+      ? `<td class="num" data-count="${esc(p.name)}">${p.song_count} / <span class="muted">…</span></td>`
+      : `<td class="num">${p.song_count}</td>`;
+    return `<tr><td>${link}</td>${count}
+            <td>${tag}${warn}</td><td style="text-align:right">${btn}</td></tr>`;
+  }).join('');
+  $('#playlists').innerHTML = `<tbody>${head}${body || '<tr><td class="empty" colspan=4>nessuna</td></tr>'}</tbody>`;
+  loadCounts();
+}
+
+// Fill 'scaricati / tutti' for synced playlists. Separate from loadPlaylists
+// because it costs a Deezer round-trip; the table shows instantly without it.
+async function loadCounts() {
+  let c;
+  try { c = await api('/api/playlist-counts'); } catch { return; }
+  document.querySelectorAll('#playlists [data-count]').forEach(td => {
+    const v = c[td.dataset.count];
+    if (v) td.textContent = `${v.present} / ${v.total}`;
+  });
+}
+
+const ACTION_HINT = {
+  'remap-dry': 'Mostra quali brani finirebbero su un album, senza scrivere',
+  'remap-apply': 'Sistema tag e cartelle dei brani mal taggati',
+  'repair-dry': 'Mostra cosa cambierebbe negli m3u8, senza scrivere',
+  'repair-apply': 'Ricostruisce gli m3u8 dalle playlist Deezer',
+};
+async function loadActions() {
+  const acts = await api('/api/actions');
+  $('#actions').innerHTML = Object.entries(acts).map(([k, label]) =>
+    `<button title="${esc(ACTION_HINT[k] || '')}" data-act="run" data-run="${esc(k)}">${esc(label)}</button>`).join('');
+}
+
+async function loadQueue() {
+  const rows = await api('/api/queue');
+  const head = `<tr><th>Titolo</th><th>Tipo</th><th>Progresso</th><th></th></tr>`;
+  const body = rows.map(q => {
+    const prog = q.size ? `${q.downloaded}/${q.size}` : '—';
+    const fail = q.failed ? ` <span style="color:var(--bad)">${q.failed} falliti</span>` : '';
+    // 'orfano' only means stuck when the job never finished. A completed job
+    // left in the queue is just residue -- say so instead of alarming.
+    let badge = '';
+    if (q.status === 'completed') badge = `<span class="tag own">completato</span> `;
+    else if (!q.in_order) badge = `<span class="tag sync">orfano</span> `;
+    const orphan = badge;
+    const errs = q.errors && q.errors.length
+      ? `<div class="muted" style="font-size:12.5px;margin-top:4px">`
+        + q.errors.map(e => `↳ ${esc(e.track)} — ${esc(e.message)}`).join('<br>')
+        + `</div>` : '';
+    const resolved = q.resolved
+      ? ` <span style="color:var(--ok)">✓ ${q.resolved} risolti</span>` : '';
+    const clean = `<button class="danger" title="Rimuove il job dalla coda; riavvia deemix un istante" data-act="clean" data-uuid="${esc(q.uuid)}" data-title="${esc(q.title)}">Pulisci</button>`;
+    return `<tr><td>${esc(q.title)} <span class="muted">${esc(q.artist)}</span>${errs}</td>
+            <td class="muted">${esc(q.type)}</td><td class="num">${prog}${fail}${resolved}</td>
+            <td style="text-align:right">${orphan}${clean}</td></tr>`;
+  }).join('');
+  $('#queue').innerHTML = `<tbody>${head}${body || '<tr><td class="empty" colspan=4>coda vuota</td></tr>'}</tbody>`;
+}
+
+async function loadErrors() {
+  const e = await api('/api/errors');
+  let parts = [];
+  if (e.loop_hits > 20) {
+    parts.push(`<div style="color:var(--bad);margin-bottom:10px">
+      ⚠ ${e.loop_hits} "Track not available" negli ultimi 15 min — deemix è probabilmente
+      bloccato in loop su una traccia. Pulisci il job orfano corrispondente.</div>`);
+  } else if (e.loop_hits) {
+    parts.push(`<div class="muted" style="margin-bottom:10px">${e.loop_hits} fallback nei log recenti (normale).</div>`);
+  }
+  if (e.errors_txt && e.errors_txt.trim()) {
+    parts.push(`<div class="muted" style="margin-bottom:6px">Ultimo report deemix (errors.txt):</div>`);
+    parts.push(`<pre>${esc(e.errors_txt.trim())}</pre>`);
+  }
+  if (e.resolved_hidden) {
+    parts.push(`<div class="muted" style="margin-top:8px">
+      <span style="color:var(--ok)">✓</span> ${e.resolved_hidden} già risolti (ora in libreria), nascosti.</div>`);
+  }
+  $('#errors').innerHTML = parts.join('') || '<span class="empty">nessun errore recente</span>';
+}
+
+
+async function loadJobs() {
+  const jobs = await api('/api/jobs');
+  if (!jobs.length) { $('#jobs').innerHTML = '<span class="empty">nessun job in questa sessione</span>'; return; }
+  $('#jobs').innerHTML = jobs.map(j => {
+    const when = new Date(j.started * 1000).toLocaleTimeString();
+    return `<div style="margin-bottom:10px">
+      <div><span class="dot ${j.status}"></span><b>${esc(j.label)}</b>
+        <span class="muted">· ${when}${j.returncode!=null ? ' · exit '+j.returncode : ''}</span></div>
+      <pre id="out-${j.id}" style="display:none"></pre>
+      <button style="margin-top:6px" onclick="toggleOut('${j.id}')">output</button>
+    </div>`;
+  }).join('');
+  jobs.filter(j => j.status === 'running').forEach(j => watch(j.id));
+}
+
+async function toggleOut(id) {
+  const pre = $('#out-' + id);
+  if (pre.style.display === 'none') {
+    const j = await api('/api/jobs/' + id);
+    pre.textContent = j.output || '(vuoto)';
+    pre.style.display = 'block';
+  } else pre.style.display = 'none';
+}
+
+function watch(id) {
+  if (watching.has(id)) return;
+  watching.add(id);
+  const tick = async () => {
+    const j = await api('/api/jobs/' + id);
+    const pre = $('#out-' + id);
+    if (pre && pre.style.display !== 'none') pre.textContent = j.output || '(vuoto)';
+    if (j.status === 'running') { setTimeout(tick, 1200); }
+    else { watching.delete(id); loadJobs(); refresh(); }
+  };
+  setTimeout(tick, 1200);
+}
+
+// Show a spinner inside a button while an async runs, restoring it after.
+// Buttons are the one thing that must feel responsive on click; a faint
+// disabled state alone is too easy to miss.
+async function withSpin(btn, fn) {
+  if (!btn) return fn();
+  const label = btn.innerHTML, wasDisabled = btn.disabled;
+  btn.disabled = true;
+  btn.innerHTML = `<span class="spin"></span> ${label}`;
+  try { return await fn(); }
+  finally { btn.innerHTML = label; btn.disabled = wasDisabled; }
+}
+
+async function runAction(action, btn) {
+  await withSpin(btn, async () => {
+    const { job } = await api('/api/run', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ action })
+    });
+    await loadJobs();
+    if (job) { openOut(job); watch(job); }
+  });
+}
+
+function openOut(id) { const p = $('#out-' + id); if (p) p.style.display = 'block'; }
+
+function askDetach(name) {
+  $('#cTitle').textContent = 'Staccare ' + name + '?';
+  $('#cText').innerHTML =
+    "La playlist smette di essere sincronizzata da Deezer e diventa tua da modificare. "
+    + "L'm3u8 viene archiviato, non cancellato. Navidrome viene riavviato un istante.";
+  const dlg = $('#confirm');
+  $('#cOk').onclick = () => withSpin($('#cOk'), async () => {
+    const { job } = await api('/api/detach', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ name })
+    });
+    dlg.close();
+    await loadJobs();
+    if (job) { openOut(job); watch(job); }
+  });
+  dlg.showModal();
+}
+
+let detailName = null;
+
+async function showPlaylist(name) {
+  detailName = name;
+  $('#dTitle').textContent = name;
+  $('#dSummary').textContent = 'caricamento…';
+  $('#dTracks').innerHTML = '';
+  $('#detail').hidden = false;
+  await renderDetail();
+}
+
+function closePlaylist() { $('#detail').hidden = true; detailName = null; }
+
+// The detail overlay is a full-screen div, not a <dialog>, so Escape does not
+// close it for free the way it does the confirm/upload dialogs.
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape' && !$('#detail').hidden) closePlaylist();
+});
+
+let uploadTarget = null;  // playlist name, or null for "any playlist"
+
+function openUpload(target) {
+  uploadTarget = target;
+  $('#uploadMsg').textContent = '';
+  $('#uploadScope').innerHTML = target
+    ? `Trascina un mp3: se è un brano mancante di «${esc(target)}» entra nella playlist.`
+    : `Trascina un mp3 qualsiasi.`;
+  $('#upload').showModal();
+}
+
+// --- uploads (background, with progress) -----------------------------------
+// Transfers run in the background via XHR so their progress is known, stay
+// listed in a tray while the user does other things, and a page-close is
+// guarded while any is still running.
+let uploadSeq = 0;
+const uploads = [];
+
+function renderUploads() {
+  const box = $('#uploads');
+  if (!uploads.length) { box.hidden = true; return; }
+  box.hidden = false;
+  const active = uploads.filter(u => u.status === 'running').length;
+  $('#upTitle').textContent = active ? `Caricamenti · ${active} in corso` : 'Caricamenti';
+  $('#upList').innerHTML = uploads.map(u => {
+    const pct = u.total ? Math.round(u.loaded / u.total * 100) : 0;
+    const st = u.status === 'done' ? `<span style="color:var(--ok)">✓ fatto</span>`
+      : u.status === 'error' ? `<span style="color:var(--bad)">✕ ${esc(u.error || 'errore')}</span>`
+      : `${pct}%`;
+    return `<div class="upitem">
+      <div class="upname">${esc(u.label)}</div>
+      <div class="upbar"><div style="width:${u.status === 'done' ? 100 : pct}%"></div></div>
+      <div class="upstat">${st}</div></div>`;
+  }).join('');
+}
+
+function clearDoneUploads() {
+  for (let i = uploads.length - 1; i >= 0; i--)
+    if (uploads[i].status !== 'running') uploads.splice(i, 1);
+  renderUploads();
+}
+
+// POST a file with real upload progress; resolves with the parsed JSON reply.
+function xhrUpload(label, url, file) {
+  const t = { id: ++uploadSeq, label, loaded: 0, total: file.size || 0, status: 'running', error: '' };
+  uploads.push(t); renderUploads();
+  return new Promise(resolve => {
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', url);
+    xhr.upload.onprogress = e => { if (e.lengthComputable) { t.loaded = e.loaded; t.total = e.total; renderUploads(); } };
+    xhr.onload = () => {
+      let d = {}; try { d = JSON.parse(xhr.responseText); } catch {}
+      if (xhr.status >= 200 && xhr.status < 300 && !d.error) { t.status = 'done'; t.loaded = t.total; }
+      else { t.status = 'error'; t.error = d.error || ('HTTP ' + xhr.status); }
+      renderUploads();
+      resolve(d.error ? d : (Object.keys(d).length ? d : { ok: true }));
+    };
+    xhr.onerror = () => { t.status = 'error'; t.error = 'rete'; renderUploads(); resolve({ error: 'rete' }); };
+    xhr.send(file);
+  });
+}
+
+// Warn before leaving while an upload or a background job is still running.
+window.addEventListener('beforeunload', e => {
+  if (uploads.some(u => u.status === 'running') || watching.size > 0) {
+    e.preventDefault(); e.returnValue = '';
+  }
+});
+
+// --- album import ----------------------------------------------------------
+let impFiles = [];   // { file, title, track }
+
+// Guess a clean title and a track number from a filename.
+function guessMeta(name, idx) {
+  let t = name.replace(/\.[^.]+$/, '');            // extension
+  const m = t.match(/^\s*(\d{1,3})\b/);            // leading number
+  t = t.replace(/^\s*\d{1,3}\s*[-._)]*\s*/, '');   // strip it and separators
+  t = t.replace(/[_]+/g, ' ').trim();
+  return { title: t || name, track: m ? +m[1] : idx + 1 };
+}
+
+function openImport() {
+  impFiles = [];
+  $('#impAA').value = ''; $('#impAL').value = '';
+  $('#impMsg').textContent = '';
+  renderImp();
+  loadArtists();
+  $('#import').showModal();
+}
+
+// Suggest artists already in the library (the top-level folders of music/).
+let artists = [];
+async function loadArtists() {
+  try { artists = (await api('/api/fs?path=')).dirs || []; }
+  catch (e) { /* suggestions are optional */ }
+}
+
+// A small styled combobox: a dropdown of matching items, opened once a couple
+// of characters are typed, with hover/keyboard selection and the match bolded.
+// Native <datalist> cannot be styled, hence this.
+const COMBO_MIN = 2;
+function comboSetup(input, menu, getItems) {
+  let active = -1, shown = [];
+  const close = () => { menu.hidden = true; active = -1; input.setAttribute('aria-expanded', 'false'); };
+  const render = () => {
+    const q = input.value.trim().toLowerCase();
+    if (q.length < COMBO_MIN) return close();
+    shown = getItems().filter(n => n.toLowerCase().includes(q)).slice(0, 8);
+    if (!shown.length) return close();
+    menu.innerHTML = shown.map((n, i) => {
+      const at = n.toLowerCase().indexOf(q);
+      const hl = esc(n.slice(0, at)) + '<b>' + esc(n.slice(at, at + q.length)) + '</b>' + esc(n.slice(at + q.length));
+      return `<div class="combo-opt${i === active ? ' active' : ''}" role="option" data-i="${i}">${hl}</div>`;
+    }).join('');
+    menu.hidden = false;
+    input.setAttribute('aria-expanded', 'true');
+  };
+  const choose = i => { if (shown[i] != null) { input.value = shown[i]; close(); input.focus(); } };
+  input.addEventListener('input', () => { active = -1; render(); });
+  input.addEventListener('focus', render);
+  input.addEventListener('keydown', e => {
+    if (menu.hidden) return;
+    if (e.key === 'ArrowDown') { e.preventDefault(); active = Math.min(active + 1, shown.length - 1); render(); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); active = Math.max(active - 1, 0); render(); }
+    else if (e.key === 'Enter' && active >= 0) { e.preventDefault(); choose(active); }
+    else if (e.key === 'Escape') { close(); }
+  });
+  menu.addEventListener('mousedown', e => {
+    const o = e.target.closest('.combo-opt');
+    if (o) { e.preventDefault(); choose(+o.dataset.i); }
+  });
+  input.addEventListener('blur', () => setTimeout(close, 120));
+}
+
+function impAdd(files) {
+  for (const file of files) {
+    const g = guessMeta(file.name, impFiles.length);
+    impFiles.push({ file, title: g.title, track: g.track });
+  }
+  renderImp();
+}
+
+function renderImp() {
+  const box = $('#impRows');
+  box.innerHTML = impFiles.map((r, i) => `
+    <div class="irow">
+      <input class="num" type="number" min="1" value="${r.track}" data-i="${i}" data-f="track">
+      <input class="ti" value="${esc(r.title)}" data-i="${i}" data-f="title">
+      <span class="rm" data-rm="${i}" title="Togli">✕</span>
+    </div>`).join('');
+  box.querySelectorAll('input').forEach(inp => inp.addEventListener('input', () => {
+    const r = impFiles[+inp.dataset.i];
+    r[inp.dataset.f] = inp.dataset.f === 'track' ? +inp.value : inp.value;
+  }));
+  box.querySelectorAll('[data-rm]').forEach(x => x.addEventListener('click', () => {
+    impFiles.splice(+x.dataset.rm, 1); renderImp();
+  }));
+  $('#impGo').disabled = impFiles.length === 0;
+  $('#impGo').textContent = impFiles.length ? `Importa ${impFiles.length} tracce` : 'Importa';
+}
+
+function doImport() {
+  const albumartist = $('#impAA').value.trim(), album = $('#impAL').value.trim();
+  const msg = $('#impMsg');
+  if (!albumartist || !album) { msg.innerHTML = `<span style="color:var(--bad)">Artista e titolo album richiesti</span>`; return; }
+  if (!impFiles.length) return;
+  const total = impFiles.length;
+  const items = [...impFiles].sort((a, b) => a.track - b.track);
+  // Hand off to the background tray; the modal is free to close.
+  msg.innerHTML = `Avviato in background: <b>${total}</b> tracce. Puoi chiudere e continuare — vedi «Caricamenti» in basso a destra.`;
+  impFiles = []; renderImp();
+  (async () => {
+    let ok = 0;
+    for (const r of items) {
+      const qs = new URLSearchParams({
+        album, albumartist, artist: albumartist,
+        title: r.title, track: r.track, total, filename: r.file.name,
+      });
+      const d = await xhrUpload(`${album} — ${r.title}`, '/api/fs/import?' + qs, r.file);
+      if (!d.error) ok++;
+    }
+    if (ok) { await api('/api/scan', { method: 'POST' }); loadStats(); loadPlaylists(); }
+  })();
+}
+
+function setupImport() {
+  const dz = $('#impDrop'), inp = $('#impFile');
+  ['dragover', 'dragenter'].forEach(e =>
+    dz.addEventListener(e, ev => { ev.preventDefault(); dz.classList.add('over'); }));
+  ['dragleave', 'dragend'].forEach(e =>
+    dz.addEventListener(e, () => dz.classList.remove('over')));
+  dz.addEventListener('drop', ev => {
+    ev.preventDefault(); dz.classList.remove('over');
+    if (ev.dataTransfer.files.length) impAdd([...ev.dataTransfer.files]);
+  });
+  inp.addEventListener('change', () => { if (inp.files.length) impAdd([...inp.files]); inp.value = ''; });
+  comboSetup($('#impAA'), $('#impAAmenu'), () => artists);
+}
+
+// --- file browser ---------------------------------------------------------
+let fsPath = '';           // current folder, relative to music/
+
+const humanSize = n => n >= 1e9 ? (n/1e9).toFixed(1)+' GB'
+  : n >= 1e6 ? (n/1e6).toFixed(1)+' MB' : Math.max(1,Math.round(n/1e3))+' KB';
+
+function openBrowser() {
+  $('#fsMsg').textContent = '';
+  $('#fsNew').value = '';
+  $('#browser').showModal();
+  fsGo('');
+}
+
+async function fsGo(path) {
+  fsPath = path;
+  const d = await api('/api/fs?path=' + encodeURIComponent(path));
+  if (d.error) { $('#fsList').innerHTML = `<div class="fsrow">${esc(d.error)}</div>`; return; }
+  fsPath = d.path;
+  $('#fsCrumb').textContent = 'music/' + (d.path ? d.path + '/' : '');
+  const rows = [];
+  if (d.path) {
+    const up = d.path.split('/').slice(0, -1).join('/');
+    rows.push(`<div class="fsrow dir up" data-fs="${esc(up)}"><span class="ic">↩</span>..</div>`);
+  }
+  for (const name of d.dirs) {
+    const child = d.path ? d.path + '/' + name : name;
+    rows.push(`<div class="fsrow dir" data-fs="${esc(child)}"><span class="ic">📁</span>${esc(name)}</div>`);
+  }
+  for (const f of d.files)
+    rows.push(`<div class="fsrow"><span class="ic">♪</span>${esc(f.name)}<span class="sz">${humanSize(f.size)}</span></div>`);
+  $('#fsList').innerHTML = rows.join('') ||
+    `<div class="fsrow muted">cartella vuota</div>`;
+}
+
+async function fsMkdir() {
+  const name = $('#fsNew').value.trim();
+  if (!name) return;
+  const d = await api('/api/fs/mkdir', {
+    method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({ path: fsPath, name })
+  });
+  if (d.error) { $('#fsMsg').innerHTML = `<span style="color:var(--bad)">${esc(d.error)}</span>`; return; }
+  $('#fsNew').value = '';
+  $('#fsMsg').textContent = '';
+  fsGo(fsPath);
+}
+
+function fsUploadFiles(files) {
+  const dir = fsPath;
+  $('#fsMsg').innerHTML = `Caricamento di <b>${files.length}</b> file in background — vedi «Caricamenti» in basso a destra.`;
+  (async () => {
+    let ok = 0;
+    for (const file of files) {
+      const d = await xhrUpload(file.name, '/api/fs/upload?path=' + encodeURIComponent(dir)
+        + '&filename=' + encodeURIComponent(file.name), file);
+      if (!d.error) ok++;
+    }
+    if (ok) { await api('/api/scan', { method: 'POST' }); loadStats(); }
+    if ($('#browser').open && fsPath === dir) fsGo(fsPath);
+  })();
+}
+
+function setupBrowser() {
+  const dz = $('#fsDrop'), inp = $('#fsFile');
+  $('#fsList').addEventListener('click', e => {
+    const row = e.target.closest('.fsrow.dir');
+    if (row) fsGo(row.dataset.fs);
+  });
+  $('#fsNew').addEventListener('keydown', e => { if (e.key === 'Enter') fsMkdir(); });
+  ['dragover', 'dragenter'].forEach(e =>
+    dz.addEventListener(e, ev => { ev.preventDefault(); dz.classList.add('over'); }));
+  ['dragleave', 'dragend'].forEach(e =>
+    dz.addEventListener(e, () => dz.classList.remove('over')));
+  dz.addEventListener('drop', ev => {
+    ev.preventDefault(); dz.classList.remove('over');
+    if (ev.dataTransfer.files.length) fsUploadFiles([...ev.dataTransfer.files]);
+  });
+  inp.addEventListener('change', () => {
+    if (inp.files.length) fsUploadFiles([...inp.files]);
+    inp.value = '';
+  });
+}
+
+function setupUpload() {
+  const dz = $('#drop'), inp = $('#file');
+  ['dragover', 'dragenter'].forEach(e =>
+    dz.addEventListener(e, ev => { ev.preventDefault(); dz.classList.add('over'); }));
+  ['dragleave', 'dragend'].forEach(e =>
+    dz.addEventListener(e, () => dz.classList.remove('over')));
+  dz.addEventListener('drop', ev => {
+    ev.preventDefault(); dz.classList.remove('over');
+    if (ev.dataTransfer.files[0]) uploadFile(ev.dataTransfer.files[0]);
+  });
+  inp.addEventListener('change', () => {
+    if (inp.files[0]) uploadFile(inp.files[0]);
+    inp.value = '';
+  });
+}
+
+async function uploadFile(file) {
+  const msg = $('#uploadMsg');
+  msg.innerHTML = `<span class="spin"></span> carico «${esc(file.name)}» e verifico…`;
+  let d;
+  try {
+    const r = await fetch('/api/playlist/upload?name=' + encodeURIComponent(uploadTarget || '*')
+      + '&filename=' + encodeURIComponent(file.name), { method: 'POST', body: file });
+    d = await r.json();
+  } catch (e) {
+    msg.innerHTML = `<span style="color:var(--bad)">errore di rete</span>`;
+    return;
+  }
+  if (d.error) {
+    msg.innerHTML = `<span style="color:var(--bad)">${esc(d.error)}</span>`;
+    return;
+  }
+  const where = d.playlist ? ` a «${esc(d.playlist)}»` : ' alla libreria';
+  msg.innerHTML = `<span class="spin"></span> ✓ ${esc(d.matched)} — aggiungo${where}…`;
+  const finish = () => {
+    msg.innerHTML = `✓ aggiunto: <b>${esc(d.matched)}</b>${where}`
+      + (d.library_only ? ` <span class="muted">(nessuna playlist)</span>` : '');
+    if (detailName) renderDetail();
+    loadPlaylists();
+  };
+  const done = async () => {
+    const j = await api('/api/jobs/' + d.job);
+    if (j.status === 'running') { setTimeout(done, 1200); return; }
+    finish();
+  };
+  if (d.job) done(); else finish();
+}
+
+async function renderDetail() {
+  const d = await api('/api/playlist?name=' + encodeURIComponent(detailName));
+  if (d.error) { $('#dSummary').textContent = 'errore: ' + d.error; return; }
+  const done = d.complete
+    ? `<span class="st present">completa</span>`
+    : `<span class="st missing">${d.missing} mancanti</span>`;
+  $('#dSummary').innerHTML =
+    `${done} · ${d.present}/${d.total} presenti`
+    + (d.excluded ? ` · ${d.excluded} esclusi` : '');
+  const head = `<tr><th>#</th><th>Brano</th><th>Stato</th><th></th></tr>`;
+  const rows = d.tracks.map((t, i) => {
+    const badge = { present: 'presente', missing: 'mancante', excluded: 'escluso' }[t.state];
+    let action = '';
+    if (t.state === 'missing')
+      action = `<button title="Non lo considerare più mancante" data-act="ignore" data-key="${esc(t.key)}" data-on="1">Escludi</button>`;
+    else if (t.state === 'excluded')
+      action = `<button title="Torna a considerarlo" data-act="ignore" data-key="${esc(t.key)}" data-on="0">Ripristina</button>`;
+    return `<tr class="${t.state === 'excluded' ? 'is-excluded' : ''}">
+      <td class="num">${i + 1}</td>
+      <td>${esc(t.artist)} — ${esc(t.title)}</td>
+      <td><span class="st ${t.state}">${badge}</span></td>
+      <td style="text-align:right">${action}</td></tr>`;
+  }).join('');
+  $('#dTracks').innerHTML = `<tbody>${head}${rows}</tbody>`;
+}
+
+async function ignoreTrack(btn, key, on) {
+  const label = btn.textContent;
+  btn.disabled = true;
+  btn.innerHTML = `<span class="spin"></span> ${label}`;
+  try {
+    await api('/api/playlist/ignore', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ name: detailName, key, on })
+    });
+    await renderDetail();
+    loadPlaylists();
+  } catch (e) {
+    btn.disabled = false;
+    btn.textContent = label;
+  }
+}
+
+function askClean(uuid, title) {
+  $('#cTitle').textContent = 'Pulire la coda?';
+  $('#cText').innerHTML =
+    `Rimuove il job <b>${esc(title)}</b> dalla coda deemix. `
+    + "deemix viene fermato e riavviato un istante per ricaricare la coda pulita. "
+    + "I file già scaricati restano.";
+  const dlg = $('#confirm');
+  $('#cOk').onclick = () => withSpin($('#cOk'), async () => {
+    const { job } = await api('/api/queue/clean', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ uuid })
+    });
+    dlg.close();
+    await loadJobs();
+    if (job) { openOut(job); watch(job); }
+  });
+  dlg.showModal();
+}
+
+// One delegated listener for buttons whose data (playlist/track/queue names)
+// is interpolated at render time. Passing that data through data-* attributes
+// instead of inline onclick keeps a name containing a quote or apostrophe from
+// breaking the handler -- esc() covers the attribute, and the value is read as
+// a plain string via dataset, never parsed as JS.
+document.addEventListener('click', e => {
+  const el = e.target.closest('[data-act]');
+  if (!el) return;
+  const d = el.dataset;
+  switch (d.act) {
+    case 'show':   e.preventDefault(); showPlaylist(d.name); break;
+    case 'detach': askDetach(d.name); break;
+    case 'run':    runAction(d.run, el); break;
+    case 'clean':  askClean(d.uuid, d.title); break;
+    case 'ignore': ignoreTrack(el, d.key, d.on === '1'); break;
+  }
+});
+
+function refresh() { loadStats(); loadPlaylists(); loadQueue(); loadErrors(); }
+// Header links to the sibling apps come from the server config, so no domain
+// is baked into the page.
+async function loadNav() {
+  let c; try { c = await api('/api/config'); } catch { return; }
+  const set = (id, url) => { const a = $('#' + id); if (url) { a.href = url; a.hidden = false; } };
+  set('lnkNavidrome', c.navidrome); set('lnkDeemix', c.deemix);
+}
+
+async function init() { setupHelp(); setupUpload(); setupBrowser(); setupImport(); loadNav(); await loadActions(); refresh(); loadJobs(); }
+init();
+setInterval(() => { loadQueue(); loadErrors(); }, 15000);
+</script>
+</body>
+</html>

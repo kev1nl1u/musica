@@ -1,0 +1,25 @@
+[Unit]
+Description=Rename deemix %%playlist%%.m3u8 files to their real Deezer title
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=ubuntu
+Group=ubuntu
+ExecStart=/usr/bin/python3 /home/ubuntu/music-stack/scripts/playlist-namer.py
+Restart=always
+RestartSec=10
+
+# Single writable path on purpose: separate ReadWritePaths entries become
+# separate bind mounts, and rename(2) between them fails with EXDEV, which
+# would cost us the atomic move that keeps deemix from overwriting the file
+# mid-flight.
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/home/ubuntu/music-stack
+PrivateTmp=true
+NoNewPrivileges=true
+
+[Install]
+WantedBy=multi-user.target

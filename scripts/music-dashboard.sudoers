@@ -1,0 +1,5 @@
+# The dashboard runs as ubuntu but playlist-detach must write Navidrome's
+# root-owned database. Grant exactly that one script, nothing else.
+# Install: sudo cp scripts/music-dashboard.sudoers /etc/sudoers.d/music-dashboard
+#          sudo chmod 440 /etc/sudoers.d/music-dashboard
+ubuntu ALL=(root) NOPASSWD: /usr/bin/python3 /home/ubuntu/music-stack/scripts/playlist-detach.py *

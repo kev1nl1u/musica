@@ -1,0 +1,20 @@
+# Matches that looked right to the matcher but are wrong.
+# Format:  <current album> -> <proposed album>   a specific mismatch to avoid
+#          <album name>                           an album to never remap at all
+# Compared case- and punctuation-insensitively. A bare album name protects a
+# manually-curated album (e.g. a Live that only exists off Deezer) whose track
+# titles would otherwise be scattered into the artist's studio releases.
+
+# Remix EPs list the original mix first, so the single matches track 1 -- but
+# filing the original under a remixes EP misrepresents it.
+Catharina -> Catharina (Remixes)
+
+# 'Alive' by Ytram is a different recording from the one on Hot Mulligan's album.
+Alive -> Pilot
+
+# The library holds Garrix's remix; the EP track is Roy Gates' original.
+America Loves EDM (Part 2) -> Midnight Sun 2.0
+
+# A DJ mix from 2023. The real home for this track is Guetta's '7', which the
+# compilation filter rejects for having too many featured artists.
+Like I Do -> New Year's Eve Party

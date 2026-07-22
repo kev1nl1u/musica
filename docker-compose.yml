@@ -1,0 +1,74 @@
+services:
+  navidrome:
+    image: deluan/navidrome:latest
+    container_name: navidrome
+    ports:
+      - "4533:4533"
+    restart: unless-stopped
+    environment:
+      # Optional settings
+      ND_LOGLEVEL: info
+      ND_SESSIONTIMEOUT: 24h
+      # Flat library: every album shares one folder, so a stray cover.jpg there
+      # would be served as the cover for all of them. Trust the per-track
+      # embedded art instead.
+      ND_COVERARTPRIORITY: embedded, cover.*, folder.*, front.*
+      # Drop deleted tracks from the database, but only on a full scan -- with
+      # 'always' a music volume that failed to mount would look like an empty
+      # library and wipe every play count and favourite.
+      ND_SCANNER_PURGEMISSING: full
+    volumes:
+      - "./navidrome/data:/data"
+      - "./music:/music:ro"
+
+  deemix:
+    image: ghcr.io/bambanah/deemix:v4.6.0
+    container_name: deemix
+    restart: unless-stopped
+    # Loopback only: not reachable from the internet.
+    # Public access goes through oauth2-proxy; this binding is for local testing
+    # over an SSH tunnel.
+    ports:
+      - "127.0.0.1:6595:6595"
+    environment:
+      PUID: 1001
+      PGID: 1001
+      UMASK_SET: "022"
+      DEEMIX_SINGLE_USER: "true"
+    volumes:
+      - "./deemix/config:/config"
+      - "./music:/downloads"
+
+  # Central auth endpoint for every private app on the domain.
+  # Serves the auth host; protected sites delegate to it via Caddy forward_auth.
+  # Adding a new app needs a Caddyfile block only -- no Google Console change.
+  oauth2-proxy:
+    image: quay.io/oauth2-proxy/oauth2-proxy:latest
+    container_name: oauth2-proxy
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:4180:4180"
+    env_file:
+      - ./oauth2-proxy/.env
+    volumes:
+      - "./oauth2-proxy/authenticated-emails.txt:/etc/oauth2-proxy/authenticated-emails.txt:ro"
+    command:
+      - --provider=google
+      - --http-address=0.0.0.0:4180
+      # Auth-only: Caddy proxies to the real backend after the check passes.
+      - --upstream=static://202
+      # The domains -- redirect-url, cookie-domain, whitelist-domain -- come from
+      # oauth2-proxy/.env as OAUTH2_PROXY_* variables (see .env.example), so no
+      # host is hardcoded here.
+      - --authenticated-emails-file=/etc/oauth2-proxy/authenticated-emails.txt
+      - --email-domain=*
+      - --set-xauthrequest
+      - --cookie-secure=true
+      - --cookie-httponly=true
+      - --cookie-samesite=lax
+      - --cookie-expire=168h
+      - --reverse-proxy=true
+      # Only Caddy reaches this (loopback-bound); Docker NAT rewrites the
+      # source to the bridge gateway, so trust that and nothing else.
+      - --trusted-proxy-ip=172.18.0.1/32
+      - --skip-provider-button=true

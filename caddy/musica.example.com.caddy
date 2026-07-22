@@ -1,0 +1,14 @@
+# music-stack control panel, behind the same Google login as deemix.
+# Append to /etc/caddy/Caddyfile, then: sudo systemctl reload caddy
+# DNS: add musica.example.com in Cloudflare (proxied), same as the other apps.
+musica.example.com {
+    forward_auth 127.0.0.1:4180 {
+        uri /oauth2/auth
+        copy_headers X-Auth-Request-Email X-Auth-Request-User
+        @error status 401
+        handle_response @error {
+            redir * https://auth.example.com/oauth2/start?rd={scheme}://{host}{uri}
+        }
+    }
+    reverse_proxy 127.0.0.1:8765
+}

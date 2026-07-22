@@ -1,0 +1,33 @@
+# Blocks to append to /etc/caddy/Caddyfile once the DNS records exist.
+#
+# Requires Cloudflare A records (Proxied) for:
+#   auth.example.com     -> YOUR.SERVER.IP
+#   deemix.example.com   -> YOUR.SERVER.IP
+
+# Central auth endpoint. Not protected -- it *is* the login flow.
+auth.example.com {
+	reverse_proxy 127.0.0.1:4180
+}
+
+# Deemix, gated by the central auth endpoint.
+deemix.example.com {
+	forward_auth 127.0.0.1:4180 {
+		uri /oauth2/auth
+		copy_headers X-Auth-Request-Email X-Auth-Request-User
+
+		# 401 from oauth2-proxy means "not logged in" -> bounce to the login
+		# flow, with rd= so the user lands back where they started.
+		@error status 401
+		handle_response @error {
+			redir * https://auth.example.com/oauth2/start?rd={scheme}://{host}{uri}
+		}
+	}
+
+	# reverse_proxy passes WebSocket upgrades through, which deemix needs
+	# for socket.io.
+	reverse_proxy 127.0.0.1:6595
+}
+
+# --- Template for future private apps ---------------------------------------
+# Copy the deemix.example.com block, change the hostname and the final
+# reverse_proxy target. Nothing to change in Google Console.

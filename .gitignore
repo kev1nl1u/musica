@@ -1,0 +1,27 @@
+# Secrets -------------------------------------------------------------------
+# Google OAuth client secret and the cookie signing key.
+oauth2-proxy/.env
+# Who is allowed in.
+oauth2-proxy/authenticated-emails.txt
+# deemix/config/login.json holds the Deezer ARL: a session token that grants
+# full access to the account. Everything under deemix/ is excluded anyway, but
+# name it so the reason is on record.
+deemix/config/login.json
+# Deployment-specific values (Deezer id, app URLs). See config.env.example.
+config.env
+
+# State and data -------------------------------------------------------------
+# Music library: copyrighted audio, not ours to publish.
+music/
+# Navidrome database: play history, credentials, listening habits.
+navidrome/
+# deemix config, queue, logs, backups.
+deemix/
+# Cached Deezer API responses.
+cache/
+
+# Local noise ----------------------------------------------------------------
+*.pyc
+__pycache__/
+*.bak
+*.bak.*

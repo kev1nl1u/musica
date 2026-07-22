@@ -1,0 +1,20 @@
+[Unit]
+Description=File playlist-downloaded singles back onto their album
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=ubuntu
+Group=ubuntu
+ExecStart=/usr/bin/python3 /home/ubuntu/music-stack/scripts/album-remap.py --apply --idle-guard
+ExecStart=/usr/bin/python3 /home/ubuntu/music-stack/scripts/playlist-repair.py --apply --idle-guard
+
+# Same single writable path as the playlist namer: separate ReadWritePaths
+# entries become separate bind mounts, and moving a file between them fails with
+# EXDEV.
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/home/ubuntu/music-stack
+PrivateTmp=true
+NoNewPrivileges=true

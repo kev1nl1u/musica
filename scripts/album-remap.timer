@@ -1,0 +1,13 @@
+[Unit]
+Description=Check for singles that belong on an album
+
+[Timer]
+# A quarter hour after boot, then every quarter hour. The unit itself refuses to
+# run while a download is still in flight, so the interval only decides how soon
+# a finished queue gets tidied.
+OnBootSec=15min
+OnUnitActiveSec=15min
+Persistent=true
+
+[Install]
+WantedBy=timers.target
